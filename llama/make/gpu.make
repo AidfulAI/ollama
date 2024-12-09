@@ -77,29 +77,18 @@ BUILD_RUNNERS = $(addprefix $(RUNNERS_BUILD_DIR)/,$(addsuffix /ollama_llama_serv
 $(GPU_RUNNER_NAME): $(BUILD_RUNNERS) $(DIST_RUNNERS) $(PAYLOAD_RUNNERS)
 
 # Build targets
-$(BUILD_DIR)/%.cu.$(GPU_RUNNER_NAME).$(OBJ_EXT): %.cu
-	@-mkdir -p $(@D)
-	$(CCACHE) $(GPU_COMPILER) -c $(GPU_COMPILER_CFLAGS) $(GPU_COMPILER_CUFLAGS) $(GPU_RUNNER_ARCH_FLAGS) -o $@ $<
-$(BUILD_DIR)/%.c.$(GPU_RUNNER_NAME).$(OBJ_EXT): %.c
-	@-mkdir -p $(@D)
-	$(CCACHE) $(GPU_COMPILER) -c $(GPU_COMPILER_CFLAGS) -o $@ $<
-$(BUILD_DIR)/%.cpp.$(GPU_RUNNER_NAME).$(OBJ_EXT): %.cpp
-	@-mkdir -p $(@D)
-	$(CCACHE) $(GPU_COMPILER) -c $(GPU_COMPILER_CXXFLAGS) -o $@ $<
 $(RUNNERS_BUILD_DIR)/$(GPU_RUNNER_NAME)/ollama_llama_server$(EXE_EXT): TARGET_CGO_LDFLAGS = -L"$(RUNNERS_BUILD_DIR)/$(GPU_RUNNER_NAME)/" $(CGO_EXTRA_LDFLAGS)
-$(RUNNERS_BUILD_DIR)/$(GPU_RUNNER_NAME)/ollama_llama_server$(EXE_EXT): $(RUNNERS_BUILD_DIR)/$(GPU_RUNNER_NAME)/$(SHARED_PREFIX)ggml_$(GPU_RUNNER_NAME).$(SHARED_EXT) *.go ./runner/*.go $(COMMON_SRCS) $(COMMON_HDRS)
+$(RUNNERS_BUILD_DIR)/$(GPU_RUNNER_NAME)/ollama_llama_server$(EXE_EXT):
 	@-mkdir -p $(@D)
+	$(MAKE) -C ../ml/backend/ggml/ggml/ggml-cuda $(GPU_RUNNER_NAME)
 	GOARCH=$(ARCH) CGO_LDFLAGS="$(TARGET_CGO_LDFLAGS)" go build -buildmode=pie  $(GPU_GOFLAGS) -trimpath -tags $(subst $(space),$(comma),$(GPU_RUNNER_CPU_FLAGS) $(GPU_RUNNER_GO_TAGS)) -o $@ ./runner
+
 $(RUNNERS_BUILD_DIR)/$(GPU_RUNNER_NAME)/$(SHARED_PREFIX)ggml_$(GPU_RUNNER_NAME).$(SHARED_EXT): $(GPU_RUNNER_OBJS) $(DIST_GPU_RUNNER_LIB_DEPS) $(COMMON_HDRS) $(GPU_RUNNER_HDRS)
 	@-mkdir -p $(@D)
 	$(CCACHE) $(GPU_COMPILER) --shared -L$(GPU_LIB_DIR) $(GGML_EXTRA_LDFLAGS) $(GPU_RUNNER_DRIVER_LIB_LINK) -L${DIST_GPU_RUNNER_DEPS_DIR} $(foreach lib, $(GPU_RUNNER_LIBS_SHORT), -l$(lib)) $(GPU_RUNNER_OBJS) -o $@
 
 # Distribution targets
 $(RUNNERS_DIST_DIR)/%: $(RUNNERS_BUILD_DIR)/%
-	@-mkdir -p $(@D)
-	$(CP) $< $@
-$(RUNNERS_DIST_DIR)/$(GPU_RUNNER_NAME)/ollama_llama_server$(EXE_EXT): $(DIST_LIB_DIR)/$(SHARED_PREFIX)ggml_$(GPU_RUNNER_NAME).$(SHARED_EXT) $(GPU_DIST_DEPS_LIBS)
-$(DIST_LIB_DIR)/$(SHARED_PREFIX)ggml_$(GPU_RUNNER_NAME).$(SHARED_EXT): $(RUNNERS_BUILD_DIR)/$(GPU_RUNNER_NAME)/$(SHARED_PREFIX)ggml_$(GPU_RUNNER_NAME).$(SHARED_EXT)
 	@-mkdir -p $(@D)
 	$(CP) $< $@
 $(DIST_GPU_RUNNER_LIB_DEPS):
